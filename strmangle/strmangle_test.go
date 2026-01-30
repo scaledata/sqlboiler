@@ -220,6 +220,56 @@ func TestTitleCase(t *testing.T) {
 	}
 }
 
+func TestTitleCaseProto(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		In  string
+		Out string
+	}{
+		{"hello_there", "HelloThere"},
+		{"", ""},
+		{"____a____a___", "AA"},
+		{"_a_a_", "AA"},
+		{"fun_id", "FunId"},
+		{"_fun_id", "FunId"},
+		{"__fun____id_", "FunId"},
+		{"uid", "Uid"},
+		{"guid", "Guid"},
+		{"uid", "Uid"},
+		{"uuid", "Uuid"},
+		{"ssn", "Ssn"},
+		{"tz", "Tz"},
+		{"thing_guid", "ThingGuid"},
+		{"guid_thing", "GuidThing"},
+		{"thing_guid_thing", "ThingGuidThing"},
+		{"id", "Id"},
+		{"gvzxc", "Gvzxc"},
+		{"id_trgb_id", "IdTrgbId"},
+		{"vzxx_vxccb_nmx", "VzxxVxccbNmx"},
+		{"thing_zxc_stuff_vxz", "ThingZxcStuffVxz"},
+		{"zxc_thing_vxz_stuff", "ZxcThingVxzStuff"},
+		{"zxc_vdf9c9_hello9", "ZxcVdf9c9Hello9"},
+		{"id9_uid911_guid9e9", "Id9Uid911Guid9e9"},
+		{"zxc_vdf0c0_hello0", "ZxcVdf0c0Hello0"},
+		{"id0_uid000_guid0e0", "Id0Uid000Guid0e0"},
+		{"ab_5zxc5d5", "Ab5zxc5d5"},
+		{"Identifier", "Identifier"},
+	}
+
+	for i, test := range tests {
+		if out := TitleCaseProto(test.In); out != test.Out {
+			t.Errorf(
+				"[%d] (%s) Out was wrong: %q, want: %q",
+				i,
+				test.In,
+				out,
+				test.Out,
+			)
+		}
+	}
+}
+
 func TestCamelCase(t *testing.T) {
 	t.Parallel()
 

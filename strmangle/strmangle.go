@@ -244,6 +244,24 @@ func TitleCase(n string) string {
 		return val
 	}
 
+	ret := titleCaseHelper(n, true)
+
+	// Cache the title case result
+	mut.Lock()
+	titleCaseCache[n] = ret
+	mut.Unlock()
+
+	return ret
+}
+
+// TitleCaseProto is like TitleCase but doesn't uppercase abbreviations.
+// This is used for proto field names where "user_id" should become "UserId"
+// instead of "UserID".
+func TitleCaseProto(n string) string {
+	return titleCaseHelper(n, false)
+}
+
+func titleCaseHelper(n string, upperCaseAbbreviations bool) string {
 	ln := len(n)
 	name := []byte(n)
 	buf := GetBuffer()
@@ -267,21 +285,25 @@ func TitleCase(n string) string {
 		}
 
 		word := name[start:end]
-		wordLen := len(word)
-		var vowels bool
+		shouldUppercase := false
+		if upperCaseAbbreviations {
+			wordLen := len(word)
+			var vowels bool
 
-		numStart := wordLen
-		for i, c := range word {
-			vowels = vowels || (c == 97 || c == 101 || c == 105 || c == 111 || c == 117 || c == 121)
+			numStart := wordLen
+			for i, c := range word {
+				vowels = vowels || (c == 97 || c == 101 || c == 105 || c == 111 || c == 117 || c == 121)
 
-			if c > 47 && c < 58 && numStart == wordLen {
-				numStart = i
+				if c > 47 && c < 58 && numStart == wordLen {
+					numStart = i
+				}
 			}
+
+			_, match := uppercaseWords[string(word[:numStart])]
+			shouldUppercase = match || !vowels
 		}
 
-		_, match := uppercaseWords[string(word[:numStart])]
-
-		if match || !vowels {
+		if shouldUppercase {
 			// Uppercase all a-z characters
 			for _, c := range word {
 				if c > 96 && c < 123 {
@@ -305,12 +327,6 @@ func TitleCase(n string) string {
 
 	ret := buf.String()
 	PutBuffer(buf)
-
-	// Cache the title case result
-	mut.Lock()
-	titleCaseCache[n] = ret
-	mut.Unlock()
-
 	return ret
 }
 

@@ -261,9 +261,10 @@ var templateFunctions = template.FuncMap{
 	"plural":   strmangle.Plural,
 
 	// Casing
-	"titleCase": strmangle.TitleCase,
-	"camelCase": strmangle.CamelCase,
-	"ignore":    strmangle.Ignore,
+	"titleCase":      strmangle.TitleCase,
+	"titleCaseProto": strmangle.TitleCaseProto,
+	"camelCase":      strmangle.CamelCase,
+	"ignore":         strmangle.Ignore,
 
 	// String Slice ops
 	"join":               func(sep string, slice []string) string { return strings.Join(slice, sep) },
