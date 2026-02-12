@@ -214,7 +214,10 @@ func (m *MySQLDriver) Columns(schema, tableName string, whitelist, blacklist []s
 				args = append(args, w)
 			}
 		}
-	} else if len(blacklist) > 0 {
+	}
+	// Apply blacklist even when whitelist is present to support
+	// filtering specific columns from whitelisted tables
+	if len(blacklist) > 0 {
 		cols := drivers.ColumnsFromList(blacklist, tableName)
 		if len(cols) > 0 {
 			query += fmt.Sprintf(" and c.column_name not in (%s)", strings.Repeat(",?", len(cols))[1:])
