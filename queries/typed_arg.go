@@ -4,42 +4,52 @@ import (
 	"database/sql/driver"
 
 	bqconv "github.com/volatiletech/sqlboiler/queries/bigquery"
+	"github.com/volatiletech/sqlboiler/queries/types"
 	"github.com/volatiletech/sqlboiler/drivers"
 )
 
-// DBType identifies a database column type for dialect-specific conversion.
-type DBType string
+// Re-export DBType and constants for caller convenience.
+type DBType = types.DBType
 
 const (
-	DBTypeDatetime  DBType = "DATETIME"
-	DBTypeDate      DBType = "DATE"
-	DBTypeTime      DBType = "TIME"
-	DBTypeJSON      DBType = "JSON"
-	DBTypeGeography DBType = "GEOGRAPHY"
+	DBTypeDatetime  = types.DBTypeDatetime
+	DBTypeDate      = types.DBTypeDate
+	DBTypeTime      = types.DBTypeTime
+	DBTypeJSON      = types.DBTypeJSON
+	DBTypeGeography = types.DBTypeGeography
 )
 
-// TypedArg wraps a query argument with its database column type,
+// maxValuerUnwrapDepth is the maximum number of driver.Valuer unwrap
+// iterations, matching database/sql behavior. Exposed as a var so
+// tests can override it.
+var maxValuerUnwrapDepth = 10
+
+// TypedArgVal wraps a query argument with its database column type,
 // enabling dialect-specific type conversion at query build time.
-type TypedArg struct {
-	dbType DBType
+type TypedArgVal struct {
+	dbType types.DBType
 	value  interface{}
 }
 
-// NewTypedArg creates a TypedArg with the given database type and value.
-func NewTypedArg(dbType DBType, value interface{}) TypedArg {
-	return TypedArg{dbType: dbType, value: value}
+// TypedArg creates a TypedArgVal with the given database type and value.
+func TypedArg(dbType types.DBType, value interface{}) TypedArgVal {
+	return TypedArgVal{dbType: dbType, value: value}
 }
 
 // Arg converts the value to the dialect-appropriate type.
-func (t TypedArg) Arg(dialect *drivers.Dialect) interface{} {
+func (t TypedArgVal) Arg(dialect *drivers.Dialect) interface{} {
 	if !isBigQueryDialect(dialect) {
 		return t.value
 	}
 
+	if t.value == nil {
+		return nil
+	}
+
 	val := t.value
 
-	// Unwrap driver.Valuer (max 10 iterations, matching database/sql).
-	for i := 0; i < 10; i++ {
+	// Unwrap driver.Valuer (max iterations matching database/sql).
+	for i := 0; i < maxValuerUnwrapDepth; i++ {
 		v, ok := val.(driver.Valuer)
 		if !ok {
 			break
@@ -51,7 +61,13 @@ func (t TypedArg) Arg(dialect *drivers.Dialect) interface{} {
 		}
 	}
 
-	result := bqconv.ConvertArg(string(t.dbType), val)
+	// If we exhausted iterations and val is still a Valuer, return
+	// the original value and let the driver handle it.
+	if _, ok := val.(driver.Valuer); ok {
+		return t.value
+	}
+
+	result := bqconv.ConvertArg(t.dbType, val)
 	if result != val {
 		return result
 	}
@@ -69,9 +85,9 @@ func isBigQueryDialect(d *drivers.Dialect) bool {
 	return d != nil && d.LQ == '`' && !d.UseLastInsertID
 }
 
-// resolveTypedArgs resolves any TypedArg values in the args slice
+// resolveTypedArgs resolves any TypedArgVal values in the args slice
 // using the given dialect. Returns the original slice unchanged if
-// no TypedArg values are present (zero allocation fast path).
+// no TypedArgVal values are present (zero allocation fast path).
 func resolveTypedArgs(args []interface{}, dialect *drivers.Dialect) []interface{} {
 	if dialect == nil {
 		return args
@@ -79,7 +95,7 @@ func resolveTypedArgs(args []interface{}, dialect *drivers.Dialect) []interface{
 
 	hasTypedArg := false
 	for _, a := range args {
-		if _, ok := a.(TypedArg); ok {
+		if _, ok := a.(TypedArgVal); ok {
 			hasTypedArg = true
 			break
 		}
@@ -90,7 +106,7 @@ func resolveTypedArgs(args []interface{}, dialect *drivers.Dialect) []interface{
 
 	resolved := make([]interface{}, len(args))
 	for i, a := range args {
-		if ta, ok := a.(TypedArg); ok {
+		if ta, ok := a.(TypedArgVal); ok {
 			resolved[i] = ta.Arg(dialect)
 		} else {
 			resolved[i] = a

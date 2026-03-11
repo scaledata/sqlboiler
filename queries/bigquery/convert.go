@@ -5,35 +5,36 @@ import (
 
 	bq "cloud.google.com/go/bigquery"
 	"cloud.google.com/go/civil"
+	"github.com/volatiletech/sqlboiler/queries/types"
 )
 
 // ConvertArg converts a value to the BigQuery-appropriate type based on
-// the database column type string. Returns the value unchanged for
-// unrecognized types.
-func ConvertArg(dbType string, value interface{}) interface{} {
+// the database column type. Returns the value unchanged for unrecognized
+// types or when no conversion applies.
+func ConvertArg(dbType types.DBType, value interface{}) interface{} {
 	switch dbType {
-	case "DATETIME":
+	case types.DBTypeDatetime:
 		if value == nil {
 			return bq.NullDateTime{}
 		}
 		if tm, ok := value.(time.Time); ok {
 			return civil.DateTimeOf(tm.UTC())
 		}
-	case "DATE":
+	case types.DBTypeDate:
 		if value == nil {
 			return bq.NullDate{}
 		}
 		if tm, ok := value.(time.Time); ok {
 			return civil.DateOf(tm.UTC())
 		}
-	case "TIME":
+	case types.DBTypeTime:
 		if value == nil {
 			return bq.NullTime{}
 		}
 		if tm, ok := value.(time.Time); ok {
 			return civil.TimeOf(tm.UTC())
 		}
-	case "JSON":
+	case types.DBTypeJSON:
 		if value == nil {
 			return bq.NullJSON{}
 		}
@@ -43,7 +44,7 @@ func ConvertArg(dbType string, value interface{}) interface{} {
 		case []byte:
 			return bq.NullJSON{JSONVal: string(s), Valid: true}
 		}
-	case "GEOGRAPHY":
+	case types.DBTypeGeography:
 		if value == nil {
 			return bq.NullGeography{}
 		}
