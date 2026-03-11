@@ -9,6 +9,7 @@ import (
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/civil"
 	"github.com/volatiletech/sqlboiler/drivers"
+	"github.com/volatiletech/sqlboiler/queries/types"
 )
 
 var bqDialect = &drivers.Dialect{
@@ -41,7 +42,9 @@ func (v testValuer) Value() (driver.Value, error) {
 	return v.val, v.err
 }
 
-// nestedValuer wraps another valuer, used to test deep unwrap chains.
+// nestedValuer wraps another valuer to test unwrap depth limits.
+// Intentionally returns a Valuer (not a valid driver.Value) to exercise
+// the unwrap loop — not to simulate a real driver.
 type nestedValuer struct {
 	inner driver.Valuer
 }
@@ -62,37 +65,37 @@ func TestTypedArgBigQuery(t *testing.T) {
 		// BigQuery conversions
 		{
 			name:    "BQ DATETIME with time.Time",
-			arg:     TypedArg(DBTypeDatetime, refTime),
+			arg:     TypedArg(types.DBTypeDatetime, refTime),
 			dialect: bqDialect,
 			want:    civil.DateTimeOf(refTime),
 		},
 		{
 			name:    "BQ DATE with time.Time",
-			arg:     TypedArg(DBTypeDate, refTime),
+			arg:     TypedArg(types.DBTypeDate, refTime),
 			dialect: bqDialect,
 			want:    civil.DateOf(refTime),
 		},
 		{
 			name:    "BQ TIME with time.Time",
-			arg:     TypedArg(DBTypeTime, refTime),
+			arg:     TypedArg(types.DBTypeTime, refTime),
 			dialect: bqDialect,
 			want:    civil.TimeOf(refTime),
 		},
 		{
 			name:    "BQ JSON with string",
-			arg:     TypedArg(DBTypeJSON, `{"key":"val"}`),
+			arg:     TypedArg(types.DBTypeJSON, `{"key":"val"}`),
 			dialect: bqDialect,
 			want:    bigquery.NullJSON{JSONVal: `{"key":"val"}`, Valid: true},
 		},
 		{
 			name:    "BQ JSON with []byte",
-			arg:     TypedArg(DBTypeJSON, []byte(`{"a":1}`)),
+			arg:     TypedArg(types.DBTypeJSON, []byte(`{"a":1}`)),
 			dialect: bqDialect,
 			want:    bigquery.NullJSON{JSONVal: `{"a":1}`, Valid: true},
 		},
 		{
 			name:    "BQ GEOGRAPHY with string",
-			arg:     TypedArg(DBTypeGeography, "POINT(1 2)"),
+			arg:     TypedArg(types.DBTypeGeography, "POINT(1 2)"),
 			dialect: bqDialect,
 			want:    bigquery.NullGeography{GeographyVal: "POINT(1 2)", Valid: true},
 		},
@@ -100,13 +103,13 @@ func TestTypedArgBigQuery(t *testing.T) {
 		// Nil value returns nil (let driver handle it)
 		{
 			name:    "BQ DATETIME nil value returns nil",
-			arg:     TypedArg(DBTypeDatetime, nil),
+			arg:     TypedArg(types.DBTypeDatetime, nil),
 			dialect: bqDialect,
 			want:    nil,
 		},
 		{
 			name:    "BQ JSON nil value returns nil",
-			arg:     TypedArg(DBTypeJSON, nil),
+			arg:     TypedArg(types.DBTypeJSON, nil),
 			dialect: bqDialect,
 			want:    nil,
 		},
@@ -114,13 +117,13 @@ func TestTypedArgBigQuery(t *testing.T) {
 		// Valuer unwrap: null.T equivalent (Valuer returning nil -> bq.Null)
 		{
 			name:    "BQ DATETIME valuer returning nil gives NullDateTime",
-			arg:     TypedArg(DBTypeDatetime, testValuer{val: nil, err: nil}),
+			arg:     TypedArg(types.DBTypeDatetime, testValuer{val: nil, err: nil}),
 			dialect: bqDialect,
 			want:    bigquery.NullDateTime{},
 		},
 		{
 			name:    "BQ JSON valuer returning nil gives NullJSON",
-			arg:     TypedArg(DBTypeJSON, testValuer{val: nil, err: nil}),
+			arg:     TypedArg(types.DBTypeJSON, testValuer{val: nil, err: nil}),
 			dialect: bqDialect,
 			want:    bigquery.NullJSON{},
 		},
@@ -128,7 +131,7 @@ func TestTypedArgBigQuery(t *testing.T) {
 		// Valuer unwrap: non-nil value
 		{
 			name:    "BQ DATETIME valuer returning time.Time",
-			arg:     TypedArg(DBTypeDatetime, testValuer{val: refTime, err: nil}),
+			arg:     TypedArg(types.DBTypeDatetime, testValuer{val: refTime, err: nil}),
 			dialect: bqDialect,
 			want:    civil.DateTimeOf(refTime),
 		},
@@ -136,7 +139,7 @@ func TestTypedArgBigQuery(t *testing.T) {
 		// Valuer unwrap: error returns original value
 		{
 			name:    "BQ DATETIME valuer error returns original",
-			arg:     TypedArg(DBTypeDatetime, testValuer{val: nil, err: driver.ErrBadConn}),
+			arg:     TypedArg(types.DBTypeDatetime, testValuer{val: nil, err: driver.ErrBadConn}),
 			dialect: bqDialect,
 			want:    testValuer{val: nil, err: driver.ErrBadConn},
 		},
@@ -152,7 +155,7 @@ func TestTypedArgBigQuery(t *testing.T) {
 		// Non-time value passthrough
 		{
 			name:    "BQ DATETIME with non-time value passthrough",
-			arg:     TypedArg(DBTypeDatetime, "not-a-time"),
+			arg:     TypedArg(types.DBTypeDatetime, "not-a-time"),
 			dialect: bqDialect,
 			want:    "not-a-time",
 		},
@@ -160,13 +163,13 @@ func TestTypedArgBigQuery(t *testing.T) {
 		// UTC conversion
 		{
 			name:    "BQ DATETIME non-UTC converts to UTC",
-			arg:     TypedArg(DBTypeDatetime, time.Date(2024, 6, 15, 20, 0, 0, 0, time.FixedZone("EST", -5*3600))),
+			arg:     TypedArg(types.DBTypeDatetime, time.Date(2024, 6, 15, 20, 0, 0, 0, time.FixedZone("EST", -5*3600))),
 			dialect: bqDialect,
 			want:    civil.DateTimeOf(time.Date(2024, 6, 16, 1, 0, 0, 0, time.UTC)),
 		},
 		{
 			name:    "BQ DATE non-UTC shifts date across boundary",
-			arg:     TypedArg(DBTypeDate, time.Date(2024, 6, 15, 23, 0, 0, 0, time.FixedZone("EST", -5*3600))),
+			arg:     TypedArg(types.DBTypeDate, time.Date(2024, 6, 15, 23, 0, 0, 0, time.FixedZone("EST", -5*3600))),
 			dialect: bqDialect,
 			want:    civil.DateOf(time.Date(2024, 6, 16, 4, 0, 0, 0, time.UTC)),
 		},
@@ -174,13 +177,13 @@ func TestTypedArgBigQuery(t *testing.T) {
 		// Non-BQ dialects: passthrough
 		{
 			name:    "MySQL DATETIME passthrough",
-			arg:     TypedArg(DBTypeDatetime, refTime),
+			arg:     TypedArg(types.DBTypeDatetime, refTime),
 			dialect: mysqlDialect,
 			want:    refTime,
 		},
 		{
 			name:    "Postgres DATETIME passthrough",
-			arg:     TypedArg(DBTypeDatetime, refTime),
+			arg:     TypedArg(types.DBTypeDatetime, refTime),
 			dialect: pgDialect,
 			want:    refTime,
 		},
@@ -207,7 +210,7 @@ func TestTypedArgMaxUnwrapDepth(t *testing.T) {
 	mid := nestedValuer{inner: innermost}
 	outer := nestedValuer{inner: mid}
 
-	arg := TypedArg(DBTypeDatetime, outer)
+	arg := TypedArg(types.DBTypeDatetime, outer)
 	got := arg.Arg(bqDialect)
 
 	// Should return original value since unwrap depth was exceeded.
@@ -217,27 +220,30 @@ func TestTypedArgMaxUnwrapDepth(t *testing.T) {
 }
 
 func TestResolveTypedArgsFastPath(t *testing.T) {
-	args := []interface{}{"a", 42, 3.14}
+	plainArgs := []interface{}{"a", 42, 3.14}
 
 	tests := []struct {
 		name    string
+		args    []interface{}
 		dialect *drivers.Dialect
 	}{
-		{"BigQuery", bqDialect},
-		{"MySQL", mysqlDialect},
-		{"Postgres", pgDialect},
-		{"nil dialect", nil},
+		{"BigQuery", plainArgs, bqDialect},
+		{"MySQL", plainArgs, mysqlDialect},
+		{"Postgres", plainArgs, pgDialect},
+		{"nil dialect", plainArgs, nil},
+		{"empty args", []interface{}{}, bqDialect},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := resolveTypedArgs(args, tt.dialect)
-			// Fast path: same slice returned when no TypedArgVal present.
-			if &result[0] != &args[0] {
-				t.Error("expected same slice (fast path), got a copy")
+			result := resolveTypedArgs(tt.args, tt.dialect)
+			if len(tt.args) > 0 {
+				if &result[0] != &tt.args[0] {
+					t.Error("expected same slice (fast path), got a copy")
+				}
 			}
-			if !reflect.DeepEqual(result, args) {
-				t.Errorf("contents changed: got %v, want %v", result, args)
+			if !reflect.DeepEqual(result, tt.args) {
+				t.Errorf("contents changed: got %v, want %v", result, tt.args)
 			}
 		})
 	}
@@ -247,11 +253,12 @@ func TestResolveTypedArgsSlowPath(t *testing.T) {
 	refTime := time.Date(2024, 6, 15, 10, 30, 45, 0, time.UTC)
 	original := []interface{}{
 		"plain",
-		TypedArg(DBTypeDatetime, refTime),
+		TypedArg(types.DBTypeDatetime, refTime),
 		42,
-		TypedArg(DBTypeDate, refTime),
-		TypedArg(DBTypeJSON, `{"k":"v"}`),
-		TypedArg(DBTypeGeography, "POINT(1 2)"),
+		TypedArg(types.DBTypeDate, refTime),
+		TypedArg(types.DBTypeTime, refTime),
+		TypedArg(types.DBTypeJSON, `{"k":"v"}`),
+		TypedArg(types.DBTypeGeography, "POINT(1 2)"),
 	}
 
 	result := resolveTypedArgs(original, bqDialect)
@@ -261,6 +268,7 @@ func TestResolveTypedArgsSlowPath(t *testing.T) {
 		civil.DateTimeOf(refTime),
 		42,
 		civil.DateOf(refTime),
+		civil.TimeOf(refTime),
 		bigquery.NullJSON{JSONVal: `{"k":"v"}`, Valid: true},
 		bigquery.NullGeography{GeographyVal: "POINT(1 2)", Valid: true},
 	}
@@ -270,11 +278,12 @@ func TestResolveTypedArgsSlowPath(t *testing.T) {
 
 	expectedOrig := []interface{}{
 		"plain",
-		TypedArg(DBTypeDatetime, refTime),
+		TypedArg(types.DBTypeDatetime, refTime),
 		42,
-		TypedArg(DBTypeDate, refTime),
-		TypedArg(DBTypeJSON, `{"k":"v"}`),
-		TypedArg(DBTypeGeography, "POINT(1 2)"),
+		TypedArg(types.DBTypeDate, refTime),
+		TypedArg(types.DBTypeTime, refTime),
+		TypedArg(types.DBTypeJSON, `{"k":"v"}`),
+		TypedArg(types.DBTypeGeography, "POINT(1 2)"),
 	}
 	if !reflect.DeepEqual(original, expectedOrig) {
 		t.Error("original slice was mutated")

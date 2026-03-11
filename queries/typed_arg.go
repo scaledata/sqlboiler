@@ -8,17 +8,6 @@ import (
 	"github.com/volatiletech/sqlboiler/drivers"
 )
 
-// Re-export DBType and constants for caller convenience.
-type DBType = types.DBType
-
-const (
-	DBTypeDatetime  = types.DBTypeDatetime
-	DBTypeDate      = types.DBTypeDate
-	DBTypeTime      = types.DBTypeTime
-	DBTypeJSON      = types.DBTypeJSON
-	DBTypeGeography = types.DBTypeGeography
-)
-
 // maxValuerUnwrapDepth is the maximum number of driver.Valuer unwrap
 // iterations, matching database/sql behavior. Exposed as a var so
 // tests can override it.
@@ -67,11 +56,7 @@ func (t TypedArgVal) Arg(dialect *drivers.Dialect) interface{} {
 		return t.value
 	}
 
-	result := bqconv.ConvertArg(t.dbType, val)
-	if result != val {
-		return result
-	}
-	return t.value
+	return bqconv.ConvertArg(t.dbType, val)
 }
 
 // isBigQueryDialect detects BigQuery by its dialect characteristics:
