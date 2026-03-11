@@ -136,6 +136,14 @@ func TestTypedArgBigQuery(t *testing.T) {
 			want:    civil.DateTimeOf(refTime),
 		},
 
+		// Valuer unwrap: unconvertible value passes through unwrapped
+		{
+			name:    "BQ DATETIME valuer returning non-time value",
+			arg:     TypedArg(types.DBTypeDatetime, testValuer{val: "not-a-time", err: nil}),
+			dialect: bqDialect,
+			want:    "not-a-time",
+		},
+
 		// Valuer unwrap: error returns original value
 		{
 			name:    "BQ DATETIME valuer error returns original",
