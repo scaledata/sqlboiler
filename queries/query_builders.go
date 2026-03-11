@@ -35,12 +35,14 @@ func BuildQuery(q *Query) (string, []interface{}) {
 
 	defer strmangle.PutBuffer(buf)
 
+	args = resolveTypedArgs(args, q.dialect)
+
 	// Cache the generated query for query object re-use
 	bufStr := buf.String()
 	q.rawSQL.sql = bufStr
 	q.rawSQL.args = args
 
-	return bufStr, resolveTypedArgs(args, q.dialect)
+	return bufStr, args
 }
 
 func buildSelectQuery(q *Query) (*bytes.Buffer, []interface{}) {
