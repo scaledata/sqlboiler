@@ -82,17 +82,17 @@ func TestTypedArgBigQuery(t *testing.T) {
 		{
 			name: "DATETIME nil value",
 			arg:  TypedArg{DBType: "DATETIME", Value: nil},
-			want: civil.DateTime{},
+			want: bigquery.NullDateTime{},
 		},
 		{
 			name: "DATE nil value",
 			arg:  TypedArg{DBType: "DATE", Value: nil},
-			want: civil.Date{},
+			want: bigquery.NullDate{},
 		},
 		{
 			name: "TIME nil value",
 			arg:  TypedArg{DBType: "TIME", Value: nil},
-			want: civil.Time{},
+			want: bigquery.NullTime{},
 		},
 		{
 			name: "JSON nil value",
@@ -108,6 +108,16 @@ func TestTypedArgBigQuery(t *testing.T) {
 			name: "unrecognized DBType passthrough",
 			arg:  TypedArg{DBType: "VARCHAR", Value: "hello"},
 			want: "hello",
+		},
+		{
+			name: "DATETIME with non-UTC time converts to UTC",
+			arg:  TypedArg{DBType: "DATETIME", Value: time.Date(2024, 6, 15, 20, 0, 0, 0, time.FixedZone("EST", -5*3600))},
+			want: civil.DateTimeOf(time.Date(2024, 6, 16, 1, 0, 0, 0, time.UTC)),
+		},
+		{
+			name: "DATE with non-UTC time shifts date across boundary",
+			arg:  TypedArg{DBType: "DATE", Value: time.Date(2024, 6, 15, 23, 0, 0, 0, time.FixedZone("EST", -5*3600))},
+			want: civil.DateOf(time.Date(2024, 6, 16, 4, 0, 0, 0, time.UTC)),
 		},
 		{
 			name: "DATETIME with non-time value passthrough",
@@ -241,7 +251,10 @@ func TestResolveTypedArgsNilDialect(t *testing.T) {
 		TypedArg{DBType: "DATETIME", Value: time.Now()},
 	}
 	result := resolveTypedArgs(args, nil)
-	// Nil dialect: return unchanged.
+	// Nil dialect: return unchanged. In production, dialect is always set
+	// by generated ORM code via SetDialect. This guard prevents a panic
+	// if dialect is somehow nil; the raw TypedArg will reach the driver
+	// and fail at exec time with a descriptive error.
 	if &result[0] != &args[0] {
 		t.Error("expected same slice with nil dialect")
 	}
@@ -256,6 +269,8 @@ func TestIsBigQueryDialect(t *testing.T) {
 		{"BigQuery", bqDialect, true},
 		{"MySQL", mysqlDialect, false},
 		{"Postgres", pgDialect, false},
+		{"MSSQL", &drivers.Dialect{LQ: '[', RQ: ']'}, false},
+		{"SQLite", &drivers.Dialect{LQ: '"', RQ: '"'}, false},
 		{"nil", nil, false},
 	}
 

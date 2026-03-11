@@ -73,11 +73,11 @@ func (t TypedArg) Arg(dialect *drivers.Dialect) interface{} {
 func nullForDBType(dbType string) interface{} {
 	switch dbType {
 	case "DATETIME":
-		return civil.DateTime{}
+		return bigquery.NullDateTime{}
 	case "DATE":
-		return civil.Date{}
+		return bigquery.NullDate{}
 	case "TIME":
-		return civil.Time{}
+		return bigquery.NullTime{}
 	case "JSON":
 		return bigquery.NullJSON{}
 	case "GEOGRAPHY":
