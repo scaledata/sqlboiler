@@ -51,77 +51,77 @@ func TestTypedArgBigQuery(t *testing.T) {
 	}{
 		{
 			name: "DATETIME with time.Time",
-			arg:  TypedArg{DBType: "DATETIME", Value: refTime},
+			arg:  NewTypedArg(DBTypeDatetime, refTime),
 			want: civil.DateTimeOf(refTime),
 		},
 		{
 			name: "DATE with time.Time",
-			arg:  TypedArg{DBType: "DATE", Value: refTime},
+			arg:  NewTypedArg(DBTypeDate, refTime),
 			want: civil.DateOf(refTime),
 		},
 		{
 			name: "TIME with time.Time",
-			arg:  TypedArg{DBType: "TIME", Value: refTime},
+			arg:  NewTypedArg(DBTypeTime, refTime),
 			want: civil.TimeOf(refTime),
 		},
 		{
 			name: "JSON with string",
-			arg:  TypedArg{DBType: "JSON", Value: `{"key":"val"}`},
+			arg:  NewTypedArg(DBTypeJSON, `{"key":"val"}`),
 			want: bigquery.NullJSON{JSONVal: `{"key":"val"}`, Valid: true},
 		},
 		{
 			name: "JSON with []byte",
-			arg:  TypedArg{DBType: "JSON", Value: []byte(`{"a":1}`)},
+			arg:  NewTypedArg(DBTypeJSON, []byte(`{"a":1}`)),
 			want: bigquery.NullJSON{JSONVal: `{"a":1}`, Valid: true},
 		},
 		{
 			name: "GEOGRAPHY with string",
-			arg:  TypedArg{DBType: "GEOGRAPHY", Value: "POINT(1 2)"},
+			arg:  NewTypedArg(DBTypeGeography, "POINT(1 2)"),
 			want: bigquery.NullGeography{GeographyVal: "POINT(1 2)", Valid: true},
 		},
 		{
 			name: "DATETIME nil value",
-			arg:  TypedArg{DBType: "DATETIME", Value: nil},
+			arg:  NewTypedArg(DBTypeDatetime, nil),
 			want: bigquery.NullDateTime{},
 		},
 		{
 			name: "DATE nil value",
-			arg:  TypedArg{DBType: "DATE", Value: nil},
+			arg:  NewTypedArg(DBTypeDate, nil),
 			want: bigquery.NullDate{},
 		},
 		{
 			name: "TIME nil value",
-			arg:  TypedArg{DBType: "TIME", Value: nil},
+			arg:  NewTypedArg(DBTypeTime, nil),
 			want: bigquery.NullTime{},
 		},
 		{
 			name: "JSON nil value",
-			arg:  TypedArg{DBType: "JSON", Value: nil},
+			arg:  NewTypedArg(DBTypeJSON, nil),
 			want: bigquery.NullJSON{},
 		},
 		{
 			name: "GEOGRAPHY nil value",
-			arg:  TypedArg{DBType: "GEOGRAPHY", Value: nil},
+			arg:  NewTypedArg(DBTypeGeography, nil),
 			want: bigquery.NullGeography{},
 		},
 		{
 			name: "unrecognized DBType passthrough",
-			arg:  TypedArg{DBType: "VARCHAR", Value: "hello"},
+			arg:  NewTypedArg("VARCHAR", "hello"),
 			want: "hello",
 		},
 		{
 			name: "DATETIME with non-UTC time converts to UTC",
-			arg:  TypedArg{DBType: "DATETIME", Value: time.Date(2024, 6, 15, 20, 0, 0, 0, time.FixedZone("EST", -5*3600))},
+			arg:  NewTypedArg(DBTypeDatetime, time.Date(2024, 6, 15, 20, 0, 0, 0, time.FixedZone("EST", -5*3600))),
 			want: civil.DateTimeOf(time.Date(2024, 6, 16, 1, 0, 0, 0, time.UTC)),
 		},
 		{
 			name: "DATE with non-UTC time shifts date across boundary",
-			arg:  TypedArg{DBType: "DATE", Value: time.Date(2024, 6, 15, 23, 0, 0, 0, time.FixedZone("EST", -5*3600))},
+			arg:  NewTypedArg(DBTypeDate, time.Date(2024, 6, 15, 23, 0, 0, 0, time.FixedZone("EST", -5*3600))),
 			want: civil.DateOf(time.Date(2024, 6, 16, 4, 0, 0, 0, time.UTC)),
 		},
 		{
 			name: "DATETIME with non-time value passthrough",
-			arg:  TypedArg{DBType: "DATETIME", Value: "not-a-time"},
+			arg:  NewTypedArg(DBTypeDatetime, "not-a-time"),
 			want: "not-a-time",
 		},
 	}
@@ -150,7 +150,7 @@ func TestTypedArgNonBQDialect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			arg := TypedArg{DBType: "DATETIME", Value: refTime}
+			arg := NewTypedArg(DBTypeDatetime, refTime)
 			got := arg.Arg(tt.dialect)
 			if got != refTime {
 				t.Errorf("expected passthrough for %s, got %v", tt.name, got)
@@ -163,10 +163,7 @@ func TestTypedArgValuerUnwrap(t *testing.T) {
 	refTime := time.Date(2024, 6, 15, 10, 30, 45, 0, time.UTC)
 
 	t.Run("valuer returning time.Time", func(t *testing.T) {
-		arg := TypedArg{
-			DBType: "DATETIME",
-			Value:  testValuer{val: refTime, err: nil},
-		}
+		arg := NewTypedArg(DBTypeDatetime, testValuer{val: refTime, err: nil})
 		got := arg.Arg(bqDialect)
 		want := civil.DateTimeOf(refTime)
 		if !reflect.DeepEqual(got, want) {
@@ -175,10 +172,7 @@ func TestTypedArgValuerUnwrap(t *testing.T) {
 	})
 
 	t.Run("valuer returning nil", func(t *testing.T) {
-		arg := TypedArg{
-			DBType: "JSON",
-			Value:  testValuer{val: nil, err: nil},
-		}
+		arg := NewTypedArg(DBTypeJSON, testValuer{val: nil, err: nil})
 		got := arg.Arg(bqDialect)
 		want := bigquery.NullJSON{}
 		if !reflect.DeepEqual(got, want) {
@@ -191,10 +185,7 @@ func TestTypedArgValuerUnwrap(t *testing.T) {
 			val: nil,
 			err: driver.ErrBadConn,
 		}
-		arg := TypedArg{
-			DBType: "DATETIME",
-			Value:  original,
-		}
+		arg := NewTypedArg(DBTypeDatetime, original)
 		got := arg.Arg(bqDialect)
 		// On error, original value is returned unchanged.
 		if got != original {
@@ -216,7 +207,7 @@ func TestResolveTypedArgsSlowPath(t *testing.T) {
 	refTime := time.Date(2024, 6, 15, 10, 30, 45, 0, time.UTC)
 	original := []interface{}{
 		"plain",
-		TypedArg{DBType: "DATETIME", Value: refTime},
+		NewTypedArg(DBTypeDatetime, refTime),
 		42,
 	}
 	result := resolveTypedArgs(original, bqDialect)
@@ -248,13 +239,10 @@ func TestResolveTypedArgsSlowPath(t *testing.T) {
 
 func TestResolveTypedArgsNilDialect(t *testing.T) {
 	args := []interface{}{
-		TypedArg{DBType: "DATETIME", Value: time.Now()},
+		NewTypedArg(DBTypeDatetime, time.Now()),
 	}
 	result := resolveTypedArgs(args, nil)
-	// Nil dialect: return unchanged. In production, dialect is always set
-	// by generated ORM code via SetDialect. This guard prevents a panic
-	// if dialect is somehow nil; the raw TypedArg will reach the driver
-	// and fail at exec time with a descriptive error.
+	// Nil dialect: return unchanged.
 	if &result[0] != &args[0] {
 		t.Error("expected same slice with nil dialect")
 	}
