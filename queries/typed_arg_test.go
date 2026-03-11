@@ -195,6 +195,12 @@ func TestTypedArgBigQuery(t *testing.T) {
 			dialect: pgDialect,
 			want:    refTime,
 		},
+		{
+			name:    "nil dialect passthrough",
+			arg:     TypedArg(types.DBTypeDatetime, refTime),
+			dialect: nil,
+			want:    refTime,
+		},
 	}
 
 	for _, tt := range tests {

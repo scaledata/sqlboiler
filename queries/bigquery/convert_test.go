@@ -120,6 +120,12 @@ func TestConvertArg(t *testing.T) {
 			value:  "hello",
 			want:   "hello",
 		},
+		{
+			name:   "unrecognized DBType nil passthrough",
+			dbType: "VARCHAR",
+			value:  nil,
+			want:   nil,
+		},
 	}
 
 	for _, tt := range tests {
