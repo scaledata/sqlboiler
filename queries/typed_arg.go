@@ -27,12 +27,8 @@ func TypedArg(dbType types.DBType, value interface{}) TypedArgVal {
 
 // Arg converts the value to the dialect-appropriate type.
 func (t TypedArgVal) Arg(dialect *drivers.Dialect) interface{} {
-	if !isBigQueryDialect(dialect) {
+	if !isBigQueryDialect(dialect) || t.value == nil {
 		return t.value
-	}
-
-	if t.value == nil {
-		return nil
 	}
 
 	val := t.value
