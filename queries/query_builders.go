@@ -24,7 +24,7 @@ func BuildQuery(q *Query) (string, []interface{}) {
 
 	switch {
 	case len(q.rawSQL.sql) != 0:
-		return q.rawSQL.sql, q.rawSQL.args
+		return q.rawSQL.sql, resolveTypedArgs(q.rawSQL.args, q.dialect)
 	case q.delete:
 		buf, args = buildDeleteQuery(q)
 	case len(q.update) > 0:
@@ -34,6 +34,8 @@ func BuildQuery(q *Query) (string, []interface{}) {
 	}
 
 	defer strmangle.PutBuffer(buf)
+
+	args = resolveTypedArgs(args, q.dialect)
 
 	// Cache the generated query for query object re-use
 	bufStr := buf.String()
