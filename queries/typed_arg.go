@@ -3,15 +3,24 @@ package queries
 import (
 	"database/sql/driver"
 
-	bqconv "github.com/volatiletech/sqlboiler/queries/bigquery"
-	"github.com/volatiletech/sqlboiler/queries/types"
 	"github.com/volatiletech/sqlboiler/drivers"
+	"github.com/volatiletech/sqlboiler/queries/types"
 )
 
 // maxValuerUnwrapDepth is the maximum number of driver.Valuer unwrap
 // iterations, matching database/sql behavior. Exposed as a var so
 // tests can override it.
 var maxValuerUnwrapDepth = 10
+
+var argConverter func(types.DBType, interface{}) interface{}
+
+// RegisterArgConverter sets the function used to convert TypedArgVal
+// values for BigQuery. It is called from the bigquery sub-package's
+// init() so the heavy BQ dependencies are only linked into binaries
+// that import that package.
+func RegisterArgConverter(fn func(types.DBType, interface{}) interface{}) {
+	argConverter = fn
+}
 
 // TypedArgVal wraps a query argument with its database column type,
 // enabling dialect-specific type conversion at query build time.
@@ -52,7 +61,10 @@ func (t TypedArgVal) Arg(dialect *drivers.Dialect) interface{} {
 		return t.value
 	}
 
-	return bqconv.ConvertArg(t.dbType, val)
+	if argConverter != nil {
+		return argConverter(t.dbType, val)
+	}
+	return val
 }
 
 // isBigQueryDialect detects BigQuery by its dialect characteristics:

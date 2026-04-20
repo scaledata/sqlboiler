@@ -5,8 +5,13 @@ import (
 
 	bq "cloud.google.com/go/bigquery"
 	"cloud.google.com/go/civil"
+	"github.com/volatiletech/sqlboiler/queries"
 	"github.com/volatiletech/sqlboiler/queries/types"
 )
+
+func init() {
+	queries.RegisterArgConverter(ConvertArg)
+}
 
 // ConvertArg converts a value to the BigQuery-appropriate type based on
 // the database column type. Returns the value unchanged for unrecognized
