@@ -61,10 +61,10 @@ func (t TypedArgVal) Arg(dialect *drivers.Dialect) interface{} {
 		return t.value
 	}
 
-	if argConverter != nil {
-		return argConverter(t.dbType, val)
+	if argConverter == nil {
+		panic("sqlboiler: BigQuery dialect detected but no ArgConverter registered — import _ \"github.com/volatiletech/sqlboiler/queries/bigquery\"")
 	}
-	return val
+	return argConverter(t.dbType, val)
 }
 
 // isBigQueryDialect detects BigQuery by its dialect characteristics:
