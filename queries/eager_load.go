@@ -154,47 +154,46 @@ func (l loadRelationshipState) callLoadFunction(depth int, loadingFrom reflect.V
 		return errors.Errorf("attempted to load %s but no L struct was found", current)
 	}
 
-	// Attempt to find the LoadRelationshipName function
-	loadMethod, found := ln.Type.MethodByName(loadMethodPrefix + current)
-	if !found {
-		return errors.Errorf("could not find %s%s method for eager loading", loadMethodPrefix, current)
+	// The L struct is stateless, so its zero value can run any of its loads.
+	loader := reflect.Zero(ln.Type)
+	relLoader, hasLoadByName := loader.Interface().(RelationshipLoader)
+	if !hasLoadByName && reflectiveLoad == nil {
+		return errors.Errorf("could not find %s%s method for eager loading: %s does not implement queries.RelationshipLoader", loadMethodPrefix, current, ln.Type)
 	}
 
-	ctxArg := reflect.ValueOf(l.ctx)
 	// Hack to allow nil executors
-	execArg := reflect.ValueOf(l.exec)
-	if !execArg.IsValid() {
-		execArg = reflect.ValueOf((*sql.DB)(nil))
+	exec := l.exec
+	if exec == nil {
+		exec = (*sql.DB)(nil)
 	}
 
-	// Get a loader instance from anything we have, *struct, or *[]*struct
+	// Load nothing when there is nothing to load into: an empty *[]*struct or
+	// one whose first element is nil.
 	val := reflect.Indirect(loadingFrom)
 	if bkind == kindPtrSliceStruct {
 		if val.Len() == 0 {
 			return nil
 		}
-		val = val.Index(0)
-		if val.IsNil() {
+		if val.Index(0).IsNil() {
 			return nil
 		}
-		val = reflect.Indirect(val)
 	}
 
-	methodArgs := make([]reflect.Value, 0, 5)
-	methodArgs = append(methodArgs, val.FieldByName(loaderStructName))
-	if ctxArg.IsValid() {
-		methodArgs = append(methodArgs, ctxArg)
-	}
-	methodArgs = append(methodArgs, execArg, reflect.ValueOf(bkind == kindStruct), loadingFrom)
-	if mods, ok := l.mods[l.buildKey(depth)]; ok {
-		methodArgs = append(methodArgs, reflect.ValueOf(mods))
+	mods := l.mods[l.buildKey(depth)]
+	singular := bkind == kindStruct
+
+	var methodFound bool
+	var err error
+	if reflectiveLoad != nil {
+		methodFound, err = reflectiveLoad(loader, current, l.ctx, exec, singular, loadingFrom, mods)
 	} else {
-		methodArgs = append(methodArgs, applicatorSentinelVal)
+		methodFound, err = relLoader.LoadByName(current, l.ctx, exec, singular, loadingFrom.Interface(), mods)
 	}
-
-	ret := loadMethod.Func.Call(methodArgs)
-	if intf := ret[0].Interface(); intf != nil {
-		return errors.Wrapf(intf.(error), "failed to eager load %s", current)
+	if !methodFound {
+		return errors.Errorf("could not find %s%s method for eager loading", loadMethodPrefix, current)
+	}
+	if err != nil {
+		return errors.Wrapf(err, "failed to eager load %s", current)
 	}
 
 	l.setLoaded(depth)
@@ -304,8 +303,3 @@ func findRelationshipStruct(obj reflect.Value) (reflect.Value, error) {
 
 	return relationshipStruct, nil
 }
-
-var (
-	applicatorSentinel    Applicator
-	applicatorSentinelVal = reflect.ValueOf(&applicatorSentinel).Elem()
-)
