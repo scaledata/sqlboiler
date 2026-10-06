@@ -337,13 +337,18 @@ func whereClause(q *Query, startAt int) (string, []interface{}) {
 		return "", nil
 	}
 
+	// Without scopedExprParens a single paren marker anywhere turns automatic
+	// bracketing off for every condition; with it, bracketing is decided per
+	// condition from the nesting depth, so the pre-scan has nothing to answer.
 	manualParens := false
-ManualParen:
-	for _, w := range q.where {
-		switch w.kind {
-		case whereKindLeftParen, whereKindRightParen:
-			manualParens = true
-			break ManualParen
+	if !q.scopedExprParens {
+	ManualParen:
+		for _, w := range q.where {
+			switch w.kind {
+			case whereKindLeftParen, whereKindRightParen:
+				manualParens = true
+				break ManualParen
+			}
 		}
 	}
 
@@ -352,6 +357,7 @@ ManualParen:
 	var args []interface{}
 
 	notFirstExpression := false
+	depth := 0
 	buf.WriteString(" WHERE ")
 	for _, where := range q.where {
 		if notFirstExpression && where.kind != whereKindRightParen {
@@ -364,9 +370,15 @@ ManualParen:
 			notFirstExpression = true
 		}
 
+		// A condition inside a paren group is already bounded by that group.
+		autoWrap := !manualParens
+		if q.scopedExprParens {
+			autoWrap = depth == 0
+		}
+
 		switch where.kind {
 		case whereKindNormal:
-			if !manualParens {
+			if autoWrap {
 				buf.WriteByte('(')
 			}
 			if q.dialect.UseIndexPlaceholders {
@@ -376,15 +388,17 @@ ManualParen:
 			} else {
 				buf.WriteString(where.clause)
 			}
-			if !manualParens {
+			if autoWrap {
 				buf.WriteByte(')')
 			}
 			args = append(args, where.args...)
 		case whereKindLeftParen:
 			buf.WriteByte('(')
+			depth++
 			notFirstExpression = false
 		case whereKindRightParen:
 			buf.WriteByte(')')
+			depth--
 		case whereKindIn:
 			ln := len(where.args)
 			// WHERE IN () is invalid sql, so it is difficult to simply run code like:
@@ -404,11 +418,11 @@ ManualParen:
 			// probably needs adjustment, or the user is passing in invalid clauses.
 			if matches == nil {
 				clause, count := convertInQuestionMarks(q.dialect.UseIndexPlaceholders, where.clause, startAt, 1, ln)
-				if !manualParens {
+				if autoWrap {
 					buf.WriteByte('(')
 				}
 				buf.WriteString(clause)
-				if !manualParens {
+				if autoWrap {
 					buf.WriteByte(')')
 				}
 				args = append(args, where.args...)
@@ -440,13 +454,13 @@ ManualParen:
 				leftClause = strings.Join(cols, ",")
 			}
 			rightClause, rightCount := convertInQuestionMarks(q.dialect.UseIndexPlaceholders, rightSide, startAt+leftCount, groupAt, ln-leftCount)
-			if !manualParens {
+			if autoWrap {
 				buf.WriteByte('(')
 			}
 			buf.WriteString(leftClause)
 			buf.WriteString(" IN ")
 			buf.WriteString(rightClause)
-			if !manualParens {
+			if autoWrap {
 				buf.WriteByte(')')
 			}
 			startAt += leftCount + rightCount

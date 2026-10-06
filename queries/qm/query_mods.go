@@ -193,6 +193,21 @@ func Distinct(clause string) QueryMod {
 	}
 }
 
+type scopedExprParensQueryMod struct{}
+
+// Apply implements QueryMod.Apply.
+func (qm scopedExprParensQueryMod) Apply(q *queries.Query) {
+	queries.SetScopedExprParens(q)
+}
+
+// ScopedExprParens confines the suppression of automatic where-clause
+// parenthesization to the conditions inside the Expr that requested it.
+// Without it a single Expr leaves every other condition unbracketed, so a
+// condition holding a bare OR binds at the top level and swallows the rest.
+func ScopedExprParens() QueryMod {
+	return scopedExprParensQueryMod{}
+}
+
 type withQueryMod struct {
 	clause string
 	args   []interface{}

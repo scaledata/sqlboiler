@@ -44,6 +44,8 @@ type Query struct {
 	offset     int
 	forlock    string
 	distinct   string
+
+	scopedExprParens bool
 }
 
 // Applicator exists only to allow
@@ -242,6 +244,13 @@ func GetSelect(q *Query) []string {
 // SetDistinct on the query.
 func SetDistinct(q *Query, distinct string) {
 	q.distinct = distinct
+}
+
+// SetScopedExprParens confines the suppression of automatic where-clause
+// parenthesization to the conditions inside the Expr that requested it,
+// instead of disabling it for the whole query.
+func SetScopedExprParens(q *Query) {
+	q.scopedExprParens = true
 }
 
 // SetCount on the query.

@@ -1,6 +1,7 @@
 package queries
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -190,6 +191,77 @@ func (testEagerZeroL) LoadNestedOne(_ boil.Executor, singular bool, obj interfac
 
 func (testEagerZeroL) LoadNestedMany(_ boil.Executor, singular bool, obj interface{}, mods Applicator) error {
 	return nil
+}
+
+func (l testEagerL) LoadByName(name string, _ context.Context, exec interface{}, singular bool, maybe interface{}, mods Applicator) (bool, error) {
+	e := exec.(boil.Executor)
+	switch name {
+	case "ChildOne":
+		return true, l.LoadChildOne(e, singular, maybe, mods)
+	case "ChildMany":
+		return true, l.LoadChildMany(e, singular, maybe, mods)
+	case "ZeroOne":
+		return true, l.LoadZeroOne(e, singular, maybe, mods)
+	case "ZeroMany":
+		return true, l.LoadZeroMany(e, singular, maybe, mods)
+	}
+	return false, nil
+}
+
+func (l testEagerChildL) LoadByName(name string, _ context.Context, exec interface{}, singular bool, maybe interface{}, mods Applicator) (bool, error) {
+	e := exec.(boil.Executor)
+	switch name {
+	case "NestedOne":
+		return true, l.LoadNestedOne(e, singular, maybe, mods)
+	case "NestedMany":
+		return true, l.LoadNestedMany(e, singular, maybe, mods)
+	}
+	return false, nil
+}
+
+func (l testEagerZeroL) LoadByName(name string, _ context.Context, exec interface{}, singular bool, maybe interface{}, mods Applicator) (bool, error) {
+	e := exec.(boil.Executor)
+	switch name {
+	case "NestedOne":
+		return true, l.LoadNestedOne(e, singular, maybe, mods)
+	case "NestedMany":
+		return true, l.LoadNestedMany(e, singular, maybe, mods)
+	}
+	return false, nil
+}
+
+func TestEagerLoadPrefersRegisteredReflectiveLoader(t *testing.T) {
+	saved := reflectiveLoad
+	defer func() { reflectiveLoad = saved }()
+
+	var called []string
+	RegisterReflectiveLoader(func(_ reflect.Value, name string, _ context.Context, _ boil.Executor, _ bool, _ reflect.Value, _ Applicator) (bool, error) {
+		called = append(called, name)
+		return true, nil
+	})
+
+	before := testEagerCounters.ChildOne
+	obj := &testEager{}
+	if err := eagerLoad(nil, nil, []string{"ChildOne"}, nil, obj, kindStruct); err != nil {
+		t.Fatal(err)
+	}
+	if len(called) != 1 || called[0] != "ChildOne" {
+		t.Errorf("reflective loader calls = %v, want [ChildOne]", called)
+	}
+	if testEagerCounters.ChildOne != before || obj.R != nil {
+		t.Error("LoadByName ran although a reflective loader was registered")
+	}
+}
+
+func TestEagerLoadUnknownRelationship(t *testing.T) {
+	obj := &testEager{}
+	err := eagerLoad(nil, nil, []string{"Missing"}, nil, obj, kindStruct)
+	if err == nil {
+		t.Fatal("expected an error for an unknown relationship")
+	}
+	if want := "could not find LoadMissing method for eager loading"; err.Error() != want {
+		t.Errorf("got %q, want %q", err.Error(), want)
+	}
 }
 
 func TestEagerLoadFromOne(t *testing.T) {
